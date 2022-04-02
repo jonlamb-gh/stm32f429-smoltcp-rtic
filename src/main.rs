@@ -6,10 +6,12 @@
 //use panic_abort as _; // panic handler
 use panic_rtt_target as _; // panic handler
 
+mod phy;
+
 #[rtic::app(device = stm32f4xx_hal::pac, dispatchers = [EXTI0, EXTI1, EXTI2])]
 mod app {
-    use crate::link_detected;
     use crate::net_clock::NetClock;
+    use crate::phy::Phy;
     use log::{debug, info};
     use rtt_logger::RTTLogger;
     use rtt_target::rtt_init_print;
@@ -141,9 +143,13 @@ mod app {
             eth_pins,
         )
         .unwrap();
+        info!("Setup: PHY");
+        let phy = Phy::new(eth.smi(&mut mdio_pin, &mut mdc_pin));
+        phy.reset();
+        phy.setup();
         info!("Setup: waiting for link");
-        while !link_detected(eth.smi(&mut mdio_pin, &mut mdc_pin)) {
-            cortex_m::asm::nop();
+        while !phy.link_status() {
+            cortex_m::asm::delay(100000);
         }
         eth.interrupt_handler();
         eth.enable_interrupt();
@@ -252,7 +258,8 @@ mod app {
 
         // Poll link status
         let smi = net.device_mut().smi(mdio, mdc);
-        if link_detected(smi) {
+        let phy = Phy::new(smi);
+        if phy.link_status() {
             link_led.set_high();
         } else {
             link_led.set_low();
@@ -283,18 +290,6 @@ mod app {
             Err(e) => debug!("{:?}", e),
         }
     }
-}
-
-fn link_detected<Mdio, Mdc>(smi: stm32_eth::smi::Smi<Mdio, Mdc>) -> bool
-where
-    Mdio: stm32_eth::smi::MdioPin,
-    Mdc: stm32_eth::smi::MdcPin,
-{
-    const PHY_ADDR: u8 = 0;
-    const PHY_REG_BSR: u8 = 0x01;
-    const PHY_REG_BSR_UP: u16 = 1 << 2;
-    let status = smi.read(PHY_ADDR, PHY_REG_BSR);
-    (status & PHY_REG_BSR_UP) == PHY_REG_BSR_UP
 }
 
 mod net_clock {

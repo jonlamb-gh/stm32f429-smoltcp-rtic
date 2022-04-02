@@ -14,6 +14,7 @@ panic-rtt-target = { version = "0.1", features = ["cortex-m"] }
 rtt-target = { version = "0.3", features = ["cortex-m"] }
 rtt-logger = "0.2"
 log = "0.4"
+modular-bitfield = "0.11"
 
 [dependencies.stm32f4xx-hal]
 version = "0.12"
